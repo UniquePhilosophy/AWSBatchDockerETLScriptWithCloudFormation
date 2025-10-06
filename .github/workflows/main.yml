@@ -46,7 +46,13 @@ jobs:
 
       - name: Submit AWS Batch Job
         run: |
+          # Truncate the Git SHA to first 7 characters
+          SHORT_SHA=${GITHUB_SHA::7}
+          
+          # Use a safe job name with only allowed characters
+          JOB_NAME="iac-etl-run-$SHORT_SHA"
+          
           aws batch submit-job \
-            --job-name iac-etl-run-${{ github.sha[:7] }} \
+            --job-name "$JOB_NAME" \
             --job-queue $BATCH_JOB_QUEUE \
             --job-definition $BATCH_JOB_DEFINITION
