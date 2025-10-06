@@ -8,15 +8,14 @@ on:
 
 env:
   AWS_REGION: eu-west-2
-  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_URI }}
-  BATCH_JOB_QUEUE: ${{ secrets.BATCH_JOB_QUEUE_ARN }}
-  BATCH_JOB_DEFINITION: ${{ secrets.BATCH_JOB_DEFINITION_ARN }}
+  ECR_REPOSITORY_URI: ${{ secrets.ECR_REPOSITORY_URI }}
+  BATCH_JOB_QUEUE_ARN: ${{ secrets.BATCH_JOB_QUEUE_ARN }}
+  BATCH_JOB_DEFINITION_ARN: ${{ secrets.BATCH_JOB_DEFINITION_ARN }}
 
 jobs:
-  deploy:
-    name: Deploy and Run
+  build-and-run-job:
+    name: Build and Run Job
     runs-on: ubuntu-latest
-
     permissions:
       id-token: write
       contents: read
@@ -28,31 +27,33 @@ jobs:
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::377983122567:role/GitHubActionsRole-IAC-Project
+          role-to-assume: ${{ secrets.IAM_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image to Amazon ECR
-        id: build-image
-        env:
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Build, tag, and push Docker image
         run: |
-          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
-          docker push $ECR_REPOSITORY:$IMAGE_TAG
-          echo "image_uri=$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          IMAGE_TAG_SHA=${{ github.sha }}
+          IMAGE_TAG_LATEST="latest"
+
+          docker build -t $ECR_REPOSITORY_URI:$IMAGE_TAG_LATEST .
+          
+          docker tag $ECR_REPOSITORY_URI:$IMAGE_TAG_LATEST $ECR_REPOSITORY_URI:$IMAGE_TAG_SHA
+
+          echo "Pushing tag: $IMAGE_TAG_LATEST"
+          docker push $ECR_REPOSITORY_URI:$IMAGE_TAG_LATEST
+
+          echo "Pushing tag: $IMAGE_TAG_SHA"
+          docker push $ECR_REPOSITORY_URI:$IMAGE_TAG_SHA
 
       - name: Submit AWS Batch Job
         run: |
-          SHORT_SHA=$(echo "${GITHUB_SHA}" | head -c 7 | tr -cd 'a-zA-Z0-9')
-
-          JOB_NAME="iac-etl-run-${SHORT_SHA}"
-
+          JOB_NAME="iac-etl-run-$(echo $GITHUB_SHA | cut -c1-8)"
           echo "Submitting AWS Batch job with name: $JOB_NAME"
-
+          
           aws batch submit-job \
             --job-name "$JOB_NAME" \
-            --job-queue "$BATCH_JOB_QUEUE" \
-            --job-definition "$BATCH_JOB_DEFINITION"
+            --job-queue "$BATCH_JOB_QUEUE_ARN" \
+            --job-definition "$BATCH_JOB_DEFINITION_ARN"
