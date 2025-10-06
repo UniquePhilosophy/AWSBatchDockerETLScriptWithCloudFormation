@@ -1,0 +1,107 @@
+# etl-batch-redshift.yml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: "AWS Batch, Redshift Serverless, S3, and ECR"
+
+Parameters:
+  UniqueSuffix:
+    Type: String
+  VPCId:
+    Type: String
+  Subnet1Id:
+    Type: String
+  Subnet2Id:
+    Type: String
+  BatchSecurityGroupId:
+    Type: String
+  BatchJobRoleArn:
+    Type: String
+  ECSExecutionRoleArn:
+    Type: String
+
+Resources:
+  LogsBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub 'iac-logs-${UniqueSuffix}-${AWS::AccountId}'
+
+  ETLRepository:
+    Type: 'AWS::ECR::Repository'
+    Properties:
+      RepositoryName: !Sub 'iac-etl-repo-${UniqueSuffix}'
+
+  RedshiftNamespace:
+    Type: 'AWS::RedshiftServerless::Namespace'
+    Properties:
+      NamespaceName: !Sub 'iac-namespace-${UniqueSuffix}'
+      AdminUsername: 'admin'
+      AdminUserPassword: 'Password123'
+      DbName: 'dev'
+
+  RedshiftWorkgroup:
+    Type: 'AWS::RedshiftServerless::Workgroup'
+    Properties:
+      WorkgroupName: !Sub 'iac-workgroup-${UniqueSuffix}'
+      NamespaceName: !Ref RedshiftNamespace
+      BaseCapacity: 8
+      SubnetIds:
+        - !Ref Subnet1Id
+        - !Ref Subnet2Id
+
+  BatchComputeEnvironment:
+    Type: 'AWS::Batch::ComputeEnvironment'
+    Properties:
+      Type: 'MANAGED'
+      ComputeResources:
+        Type: 'FARGATE_SPOT'
+        MaxvCpus: 4
+        Subnets:
+          - !Ref Subnet1Id
+          - !Ref Subnet2Id
+        SecurityGroupIds:
+          - !Ref BatchSecurityGroupId
+      State: 'ENABLED'
+
+  BatchJobQueue:
+    Type: 'AWS::Batch::JobQueue'
+    Properties:
+      JobQueueName: !Sub 'iac-job-queue-${UniqueSuffix}'
+      ComputeEnvironmentOrder:
+        - Order: 1
+          ComputeEnvironment: !Ref BatchComputeEnvironment
+      Priority: 1
+      State: 'ENABLED'
+
+  BatchJobDefinition:
+    Type: 'AWS::Batch::JobDefinition'
+    Properties:
+      JobDefinitionName: !Sub 'iac-job-definition-${UniqueSuffix}'
+      Type: 'container'
+      PlatformCapabilities:
+        - 'FARGATE'
+      ContainerProperties:
+        Image: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ETLRepository}:latest'
+        Command: []
+        JobRoleArn: !Ref BatchJobRoleArn
+        ExecutionRoleArn: !Ref ECSExecutionRoleArn
+        ResourceRequirements:
+          - Type: 'VCPU'
+            Value: '1'
+          - Type: 'MEMORY'
+            Value: '2048'
+        Environment:
+          - Name: 'S3_BUCKET'
+            Value: !Ref LogsBucket
+          - Name: 'REDSHIFT_WORKGROUP'
+            Value: !Ref RedshiftWorkgroup
+
+Outputs:
+  S3BucketName:
+    Value: !Ref LogsBucket
+  ECRRepositoryUri:
+    Value: !GetAtt ETLRepository.RepositoryUri
+  BatchJobQueueArn:
+    Value: !GetAtt BatchJobQueue.JobQueueArn
+  BatchJobDefinitionArn:
+    Value: !GetAtt BatchJobDefinition.JobDefinitionArn
+  RedshiftWorkgroupName:
+    Value: !Ref RedshiftWorkgroup

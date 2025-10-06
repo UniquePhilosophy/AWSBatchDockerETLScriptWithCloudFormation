@@ -1,0 +1,55 @@
+# iam-github-role.yml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'IAM Role for GitHub Actions to deploy and run the ETL job.'
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: 'UniquePhilosophy'
+  GitHubRepo:
+    Type: String
+    Default: 'AWSBatchDockerETLScriptWithCloudFormation'
+
+Resources:
+  GitHubActionsRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: 'GitHubActionsRole-IAC-Project'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: 'Allow'
+            Principal:
+              Federated: !Sub 'arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com'
+            Action: 'sts:AssumeRoleWithWebIdentity'
+            Condition:
+              StringLike:
+                'token.actions.githubusercontent.com:sub': !Sub 'repo:${GitHubOrg}/${GitHubRepo}:*'
+      Policies:
+        - PolicyName: 'GitHubActionsPolicy'
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: 'Allow'
+                Action:
+                  - 's3:PutObject'
+                  - 's3:GetObject'
+                  - 's3:ListBucket'
+                Resource: '*' # For simplicity, a real project would scope this to the specific bucket ARN
+              - Effect: 'Allow'
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:InitiateLayerUpload'
+                  - 'ecr:UploadLayerPart'
+                  - 'ecr:CompleteLayerUpload'
+                  - 'ecr:PutImage'
+                Resource: '*'
+              - Effect: 'Allow'
+                Action: 'batch:SubmitJob'
+                Resource: '*'
+
+Outputs:
+  GitHubActionsRoleArn:
+    Description: 'ARN of the IAM role for GitHub Actions'
+    Value: !GetAtt GitHubActionsRole.Arn
