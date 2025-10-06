@@ -1,0 +1,5 @@
+COLUMNMETADATA	True	False	False	device_id	0	device_id	1	50	0	public	performance_summary	varchar
+COLUMNMETADATA	False	False	True	avg_frame_rate	0	avg_frame_rate	1	17	17	public	performance_summary	float8
+COLUMNMETADATA	False	False	True	avg_gpu_usage	0	avg_gpu_usage	1	17	17	public	performance_summary	float8
+COLUMNMETADATA	False	False	True	max_latency_ms	0	max_latency_ms	1	10	0	public	performance_summary	int4
+COLUMNMETADATA	False	False	True	log_count	0	log_count	1	10	0	public	performance_summary	int4

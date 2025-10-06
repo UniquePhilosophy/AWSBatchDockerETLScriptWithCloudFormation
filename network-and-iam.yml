@@ -116,7 +116,10 @@ Resources:
                 Resource: '*'
               - Effect: 'Allow'
                 Action:
+                  - 'redshift-serverless:GetCredentials' 
                   - 'redshift-data:ExecuteStatement'
+                  - 'redshift-data:DescribeStatement'
+                  - 'redshift-data:ListStatements'
                 Resource: '*'
 
   ECSExecutionRole:
@@ -133,7 +136,6 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
 
-  # --- VPC Endpoints to fix ECR connection issue ---
   S3GatewayEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -167,17 +169,29 @@ Resources:
         - !Ref Subnet2
       SecurityGroupIds:
         - !Ref BatchSecurityGroup
+        
+  CloudWatchLogsEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref IACVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
+      VpcEndpointType: 'Interface'
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref Subnet1
+        - !Ref Subnet2
+      SecurityGroupIds:
+        - !Ref BatchSecurityGroup
 
-Outputs:
-  VPCId:
-    Value: !Ref IACVPC
-  Subnet1Id:
-    Value: !Ref Subnet1
-  Subnet2Id:
-    Value: !Ref Subnet2
-  BatchSecurityGroupId:
-    Value: !Ref BatchSecurityGroup
-  BatchJobRoleArn:
-    Value: !GetAtt BatchJobRole.Arn
-  ECSExecutionRoleArn:
-    Value: !GetAtt ECSExecutionRole.Arn
+  RedshiftDataEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref IACVPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.redshift-data'
+      VpcEndpointType: 'Interface'
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref Subnet1
+        - !Ref Subnet2
+      SecurityGroupIds:
+        - !Ref BatchSecurityGroup
