@@ -1,0 +1,52 @@
+# .github/workflows/main.yml
+name: Build, Push, and Run ETL Job
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  AWS_REGION: eu-west-2
+  ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY_URI }}
+  BATCH_JOB_QUEUE: ${{ secrets.BATCH_JOB_QUEUE_ARN }}
+  BATCH_JOB_DEFINITION: ${{ secrets.BATCH_JOB_DEFINITION_ARN }}
+
+jobs:
+  deploy:
+    name: Deploy and Run
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::377983122567:role/GitHubActionsRole-IAC-Project
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REPOSITORY:$IMAGE_TAG
+          echo "image_uri=$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      - name: Submit AWS Batch Job
+        run: |
+          aws batch submit-job \
+            --job-name disguise-etl-run-${{ github.sha }} \
+            --job-queue $BATCH_JOB_QUEUE \
+            --job-definition $BATCH_JOB_DEFINITION

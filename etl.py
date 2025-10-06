@@ -1,5 +1,6 @@
 # etl.py
 import os
+import time
 import boto3
 import pandas as pd
 from io import StringIO
@@ -17,7 +18,6 @@ s3_client = boto3.client('s3')
 redshift_client = boto3.client('redshift-data')
 
 def main():
-    """Main ETL function."""
     logging.info("Starting ETL process...")
 
     logging.info(f"Extracting data from s3://{S3_BUCKET}/{INPUT_KEY}")
@@ -65,16 +65,28 @@ def main():
     logging.info("Successfully loaded data into Redshift.")
 
 def execute_sql(sql_statement):
-    """Executes a SQL statement using the Redshift Data API."""
     try:
-        redshift_client.execute_statement(
+        response = redshift_client.execute_statement(
             WorkgroupName=REDSHIFT_WORKGROUP,
             Database=DB_NAME,
             Sql=sql_statement
         )
+        statement_id = response['Id']
+
+        status = 'STARTED'
+        while status in ['STARTED', 'SUBMITTED']:
+            desc = redshift_client.describe_statement(Id=statement_id)
+            status = desc['Status']
+            if status in ['FINISHED', 'FAILED', 'ABORTED']:
+                break
+            time.sleep(1)
+
+        if status != 'FINISHED':
+            raise RuntimeError(f"SQL statement failed: {desc}")
     except Exception as e:
         logging.error(f"Error executing SQL: {e}")
         raise
+
 
 if __name__ == '__main__':
     main()
