@@ -47,6 +47,6 @@ jobs:
       - name: Submit AWS Batch Job
         run: |
           aws batch submit-job \
-            --job-name disguise-etl-run-${{ github.sha }} \
+            --job-name iac-etl-run-${{ github.sha }} \
             --job-queue $BATCH_JOB_QUEUE \
             --job-definition $BATCH_JOB_DEFINITION
